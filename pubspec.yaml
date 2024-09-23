@@ -1,0 +1,19 @@
+name: frame_gemini_chat_text
+description: "Speak to a Gemini AI model by voice using platform-provided speech-to-text, and show response text in any language on the Brilliant Labs Frame display"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.4.4 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
