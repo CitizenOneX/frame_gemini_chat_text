@@ -22,7 +22,7 @@ class MainApp extends StatefulWidget {
 /// SimpleFrameAppState mixin helps to manage the lifecycle of the Frame connection outside of this file
 class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // google_generative_ai state
-  GenerativeModel? _model;
+  ChatSession? _chat;
   String _apiKey = '';
   final TextEditingController _textFieldController = TextEditingController();
 
@@ -79,8 +79,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
     _addMessage(textMessage);
 
-    final response = await _model!.generateContent([Content.text(message.text)]);
-    print(response.text);
+    final response = await _chat!.sendMessage(Content.text(message.text));
+
+    _log.info('Gemini response: ${response.text}');
+
     final chatBotMessage = types.TextMessage(
       author: _chatBot,
       createdAt: DateTime.now().millisecondsSinceEpoch,
@@ -113,10 +115,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   Future<void> _initChatModel() async {
     await _loadApiKey();
 
-    _model = GenerativeModel(
+    _chat = GenerativeModel(
       model: 'gemini-1.5-flash',
       apiKey: _apiKey,
-    );
+    ).startChat();
   }
 
   @override
