@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 
+import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
+import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:uuid/uuid.dart';
 
 void main() => runApp(const MainApp());
 
@@ -18,8 +21,15 @@ class MainApp extends StatefulWidget {
 
 /// SimpleFrameAppState mixin helps to manage the lifecycle of the Frame connection outside of this file
 class MainAppState extends State<MainApp> with SimpleFrameAppState {
+  // google_generative_ai state
   String _apiKey = '';
   final TextEditingController _textFieldController = TextEditingController();
+
+  // flutter_chat_ui state
+  List<types.Message> _messages = [];
+  final _user = const types.User(
+    id: '82091008-a484-4a89-ae75-a22bf8d6f3ac',
+  );
 
   MainAppState() {
     Logger.root.level = Level.FINE;
@@ -47,6 +57,23 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _apiKey = _textFieldController.text;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_key', _apiKey);
+  }
+
+  void _addMessage(types.Message message) {
+    setState(() {
+      _messages.insert(0, message);
+    });
+  }
+
+  void _handleSendPressed(types.PartialText message) {
+    final textMessage = types.TextMessage(
+      author: _user,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      id: const Uuid().v4(),
+      text: message.text,
+    );
+
+    _addMessage(textMessage);
   }
 
 
@@ -106,6 +133,16 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                   ],
                 ),
                 ElevatedButton(onPressed: run, child: const Text('Run')),
+                Expanded(
+                  child: Chat(
+                    messages: _messages,
+                    onSendPressed: _handleSendPressed,
+                    showUserAvatars: true,
+                    showUserNames: true,
+                    user: _user,
+                    theme: const DarkChatTheme(),
+                  ),
+                ),
               ],
             ),
           ),
