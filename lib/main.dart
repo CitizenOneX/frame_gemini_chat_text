@@ -22,13 +22,17 @@ class MainApp extends StatefulWidget {
 /// SimpleFrameAppState mixin helps to manage the lifecycle of the Frame connection outside of this file
 class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // google_generative_ai state
+  GenerativeModel? _model;
   String _apiKey = '';
   final TextEditingController _textFieldController = TextEditingController();
 
   // flutter_chat_ui state
-  List<types.Message> _messages = [];
+  final List<types.Message> _messages = [];
   final _user = const types.User(
     id: '82091008-a484-4a89-ae75-a22bf8d6f3ac',
+  );
+  final _chatBot = const types.User(
+    id: 'F2091008-a484-4a89-ae75-a22bf8d6f3ac',
   );
 
   MainAppState() {
@@ -40,9 +44,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   }
 
   @override
-  void initState() {
+  initState() {
     super.initState();
-    _loadApiKey();
+    _initChatModel();
   }
 
   Future<void> _loadApiKey() async {
@@ -65,7 +69,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
   }
 
-  void _handleSendPressed(types.PartialText message) {
+  Future<void> _handleSendPressed(types.PartialText message) async {
     final textMessage = types.TextMessage(
       author: _user,
       createdAt: DateTime.now().millisecondsSinceEpoch,
@@ -74,6 +78,17 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     );
 
     _addMessage(textMessage);
+
+    final response = await _model!.generateContent([Content.text(message.text)]);
+    print(response.text);
+    final chatBotMessage = types.TextMessage(
+      author: _chatBot,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      id: const Uuid().v4(),
+      text: response.text ?? 'No response',
+    );
+
+    _addMessage(chatBotMessage);
   }
 
 
@@ -83,15 +98,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (mounted) setState(() {});
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: _apiKey,
-      );
-
-      const prompt = 'Write a story about a magic backpack in Chinese.';
-
-      final response = await model.generateContent([Content.text(prompt)]);
-      print(response.text);
+      // TODO do the thing
 
       currentState = ApplicationState.ready;
       if (mounted) setState(() {});
@@ -101,6 +108,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       currentState = ApplicationState.ready;
       if (mounted) setState(() {});
     }
+  }
+
+  Future<void> _initChatModel() async {
+    await _loadApiKey();
+
+    _model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+    );
   }
 
   @override
