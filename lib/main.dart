@@ -160,10 +160,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   /// updates the text of the latest message, suitable for streaming input from the
   /// user or from the LLM
-  void _updateLatestMessage(String text) {
+  void _updateLatestMessage(String text, {bool concat = false}) {
     if (_messages.isNotEmpty) {
+      var message = _messages[0] as types.TextMessage;
       setState(() {
-        var updated = (_messages[0] as types.TextMessage).copyWith(text: text);
+        var updated = message.copyWith(text: concat ? message.text + text : text);
         _messages[0] = updated;
       });
     }
@@ -180,18 +181,23 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   Future<void> _handleTextQuery(String request) async {
     try {
-      final response = await _chat!.sendMessage(Content.text(request));
-
-      _log.info('Gemini response: ${response.text}');
-
+      // create the bubble for the response before it starts streaming in
       final chatBotMessage = types.TextMessage(
         author: _chatBot,
         createdAt: DateTime.now().millisecondsSinceEpoch,
         id: const Uuid().v4(),
-        text: response.text ?? 'No response',
+        text: '',
       );
 
       _addMessage(chatBotMessage);
+
+      final responses = _chat!.sendMessageStream(Content.text(request));
+
+      await for (final response in responses) {
+        _log.info('Gemini response: ${response.text}');
+
+        if (response.text != null)  _updateLatestMessage(response.text!, concat: true);
+      }
 
     } catch (e) {
 
