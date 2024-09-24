@@ -67,7 +67,31 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _initSpeech();
   }
 
-    /// This has to happen only once per app, but microphone permission must be provided
+  /// Initialise our LLM
+  Future<void> _initChatModel() async {
+    await _loadApiKey();
+
+    _initChatSession();
+  }
+
+  /// Starts a new Chat Session, either at application start or when the user clears the current conversation
+  void _initChatSession() {
+    _chat = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+      systemInstruction: Content.text('You are a helpful bot that answers with short replies, preferably fewer than 50 words and without markdown or any other formatting because your replies will be displayed on a small text-only display.'),
+      safetySettings: [
+        // note: safety settings are disabled because it kept blocking "what is the photoelectric effect" due to safety.
+        // Be nice and stay safe.
+        SafetySetting(HarmCategory.harassment, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.hateSpeech, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.dangerousContent, HarmBlockThreshold.none),
+        SafetySetting(HarmCategory.sexuallyExplicit, HarmBlockThreshold.none),
+      ]
+    ).startChat();
+  }
+
+  /// This has to happen only once per app, but microphone permission must be provided
   void _initSpeech() async {
     _speechEnabled = await _speechToText.initialize(onError: _onSpeechError);
 
@@ -126,6 +150,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     setState(() {
       _messages.clear();
     });
+
+    // start a new conversation with the model, removing history
+    _initChatSession();
   }
 
   Future<void> _handleTextQuery(String request) async {
@@ -138,20 +165,38 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
     _addMessage(textMessage);
 
-    final response = await _chat!.sendMessage(Content.text(request));
+    try {
+      final response = await _chat!.sendMessage(Content.text(request));
 
-    _log.info('Gemini response: ${response.text}');
+      _log.info('Gemini response: ${response.text}');
 
-    final chatBotMessage = types.TextMessage(
-      author: _chatBot,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-      id: const Uuid().v4(),
-      text: response.text ?? 'No response',
-    );
+      final chatBotMessage = types.TextMessage(
+        author: _chatBot,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: const Uuid().v4(),
+        text: response.text ?? 'No response',
+      );
 
-    _addMessage(chatBotMessage);
+      _addMessage(chatBotMessage);
+
+    } catch (e) {
+
+      final chatBotMessage = types.TextMessage(
+        author: _chatBot,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: const Uuid().v4(),
+        text: 'Error: $e',
+      );
+
+      // show the error message for a short time
+      _addMessage(chatBotMessage);
+
+      await Future.delayed(const Duration(seconds: 5));
+
+      // start a new conversation with the model, removing history
+      _initChatSession();
+    }
   }
-
 
   @override
   Future<void> run() async {
@@ -211,15 +256,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       currentState = ApplicationState.ready;
       if (mounted) setState(() {});
     }
-  }
-
-  Future<void> _initChatModel() async {
-    await _loadApiKey();
-
-    _chat = GenerativeModel(
-      model: 'gemini-1.5-flash',
-      apiKey: _apiKey,
-    ).startChat();
   }
 
   @override
