@@ -41,6 +41,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // Speech to text state
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
+  List<LocaleName>? _localeNames;
+  String? _currentLocaleId;
   String _partialResult = "N/A";
   String _finalResult = "N/A";
   String? _prevText;
@@ -77,9 +79,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   /// Starts a new Chat Session, either at application start or when the user clears the current conversation
   void _initChatSession() {
     _chat = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-latest',
       apiKey: _apiKey,
-      systemInstruction: Content.text('You are a helpful bot that answers with short replies, preferably fewer than 50 words and without markdown or any other formatting because your replies will be displayed on a small text-only display.'),
+      systemInstruction: Content.text('You are a helpful bot that answers with short replies, preferably fewer than 50 words and without markdown or any other formatting because your replies will be displayed on a small text-only display. You answer in the language the user is speaking unless they request otherwise.'),
       safetySettings: [
         // note: safety settings are disabled because it kept blocking "what is the photoelectric effect" due to safety.
         // Be nice and stay safe.
@@ -104,6 +106,16 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _log.fine('Speech-to-text initialized');
       // this will initialise before Frame is connected, so proceed to disconnected state
       currentState = ApplicationState.disconnected;
+
+      // Get the list of languages installed on the supporting platform so they
+      // can be displayed in the UI for selection by the user.
+      _localeNames = await _speechToText.locales();
+      _log.info('Locales: ${_localeNames!.map((locale) => locale.name).join(', ')}');
+
+      var systemLocale = await _speechToText.systemLocale();
+      _log.info('System Locale: ${systemLocale?.name ?? ''} (${systemLocale?.localeId ?? ''})');
+
+      _currentLocaleId = systemLocale?.localeId ?? '';
     }
 
     if (mounted) setState(() {});
@@ -207,8 +219,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       // listen for STT
       await _speechToText.listen(
         listenOptions: SpeechListenOptions(
-          cancelOnError: true, onDevice: false, listenMode: ListenMode.dictation
+          cancelOnError: true,
+          onDevice: false,
+          listenMode: ListenMode.dictation,
+          autoPunctuation: true
         ),
+        localeId: _currentLocaleId,
         onResult: (SpeechRecognitionResult result) async {
           if (currentState == ApplicationState.ready) {
             // user has cancelled already, don't process result
@@ -286,6 +302,21 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     Expanded(child: TextField(controller: _textFieldController, obscureText: true, obscuringCharacter: '*', decoration: const InputDecoration(hintText: 'Enter Gemini api_key'),)),
                     ElevatedButton(onPressed: _saveApiKey, child: const Text('Save'))
                   ],
+                ),
+                DropdownButton<String>(
+                  hint: const Text('Select language'),
+                  value: _currentLocaleId,
+                  onChanged: (newValue) {
+                    setState(() {
+                      _currentLocaleId = newValue;
+                    });
+                  },
+                  items: _localeNames?.map((locale) {
+                    return DropdownMenuItem<String>(
+                      value: locale.localeId,
+                      child: Text(locale.name),
+                    );
+                  }).toList(),
                 ),
                 ElevatedButton(onPressed: run, child: const Text('Run')),
                 Expanded(
