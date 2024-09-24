@@ -122,6 +122,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
   }
 
+  void _clearChat() {
+    setState(() {
+      _messages.clear();
+    });
+  }
+
   Future<void> _handleTextQuery(String request) async {
     final textMessage = types.TextMessage(
       author: _user,
@@ -257,7 +263,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     customBottomWidget: Row(
                       children: [
                         const Spacer(),
-                        getFloatingActionButtonWidget(const Icon(Icons.mic), const Icon(Icons.cancel)) ?? const Spacer(),
+                        ...getChatActionButtonsWidgets(),
                       ]
                     ),
                   ),
@@ -268,4 +274,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           persistentFooterButtons: getFooterButtonsWidget(),
         ));
   }
+
+  List<Widget> getChatActionButtonsWidgets() {
+    switch (currentState) {
+      case ApplicationState.ready:
+        return [
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: FloatingActionButton(onPressed: _clearChat, child: const Icon(Icons.create)),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: FloatingActionButton(onPressed: run, child: const Icon(Icons.mic)),
+          ),
+        ];
+
+      case ApplicationState.running:
+        return [
+          Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: FloatingActionButton(onPressed: cancel, child: const Icon(Icons.cancel)),
+          ),
+        ];
+
+      default:
+        return [];
+    }
+  }
+
 }
