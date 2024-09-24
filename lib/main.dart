@@ -158,6 +158,17 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
   }
 
+  /// updates the text of the latest message, suitable for streaming input from the
+  /// user or from the LLM
+  void _updateLatestMessage(String text) {
+    if (_messages.isNotEmpty) {
+      setState(() {
+        var updated = (_messages[0] as types.TextMessage).copyWith(text: text);
+        _messages[0] = updated;
+      });
+    }
+  }
+
   void _clearChat() {
     setState(() {
       _messages.clear();
@@ -168,15 +179,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   }
 
   Future<void> _handleTextQuery(String request) async {
-    final textMessage = types.TextMessage(
-      author: _user,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-      id: const Uuid().v4(),
-      text: request,
-    );
-
-    _addMessage(textMessage);
-
     try {
       final response = await _chat!.sendMessage(Content.text(request));
 
@@ -216,13 +218,23 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (mounted) setState(() {});
 
     try {
+      // create the bubble for this message, and we'll update it as speech-to-text updates come in
+      final textMessage = types.TextMessage(
+        author: _user,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: const Uuid().v4(),
+        text: '',
+      );
+      _addMessage(textMessage);
+
       // listen for STT
       await _speechToText.listen(
         listenOptions: SpeechListenOptions(
           cancelOnError: true,
           onDevice: false,
           listenMode: ListenMode.dictation,
-          autoPunctuation: true
+          autoPunctuation: true,
+          partialResults: true,
         ),
         localeId: _currentLocaleId,
         onResult: (SpeechRecognitionResult result) async {
@@ -233,19 +245,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           }
 
           if (result.finalResult) {
-            // on a final result we fetch the wiki content
+            // on a final result we query the LLM
             _finalResult = result.recognizedWords;
             _partialResult = '';
             _log.fine('Final result: $_finalResult');
             _stopListening();
 
-            // add final result to chat stream
+            // put the final text in the bubble
+            _updateLatestMessage(_finalResult);
+
+            // send off the query to the LLM
             _handleTextQuery(_finalResult);
 
-            // send final query text to Frame line 1 (before we confirm the title)
+            // send final request text to Frame
             if (_finalResult != _prevText) {
               //await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: _finalResult));
-              // TODO for now, just log result, can send a TextSpriteBlock in future
+              // TODO can send a TextSpriteBlock in future with the final request before the LLM response
               _prevText = _finalResult;
             }
 
@@ -255,11 +270,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           else {
             // partial result - just display in-progress text
             _partialResult = result.recognizedWords;
-            if (mounted) setState((){});
+            _updateLatestMessage(_partialResult);
 
             _log.fine('Partial result: $_partialResult, ${result.alternates}');
             if (_partialResult != _prevText) {
-              // TODO for now, just log result, can send a TextSpriteBlock in future
+              // TODO can send a TextSpriteBlock in future to echo the request on Frame before the response comes
               //await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: _partialResult));
               _prevText = _partialResult;
             }
