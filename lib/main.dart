@@ -6,6 +6,9 @@ import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:uuid/uuid.dart';
 
 void main() => runApp(const MainApp());
@@ -35,6 +38,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     id: 'F2091008-a484-4a89-ae75-a22bf8d6f3ac',
   );
 
+  // Speech to text state
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  String _partialResult = "N/A";
+  String _finalResult = "N/A";
+  String? _prevText;
+
+
   MainAppState() {
     Logger.root.level = Level.FINE;
     Logger.root.onRecord.listen((record) {
@@ -46,7 +57,49 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   @override
   initState() {
     super.initState();
+
+    currentState = ApplicationState.initializing;
+
+    // kick off chat model initialization asynchronously
     _initChatModel();
+
+    // kick off speech-to-text initialization asynchronously
+    _initSpeech();
+  }
+
+    /// This has to happen only once per app, but microphone permission must be provided
+  void _initSpeech() async {
+    _speechEnabled = await _speechToText.initialize(onError: _onSpeechError);
+
+    if (!_speechEnabled) {
+      _finalResult = 'The user has denied the use of speech recognition. Microphone permission must be added manually in device settings.';
+      _log.severe(_finalResult);
+      currentState = ApplicationState.disconnected;
+    }
+    else {
+      _log.fine('Speech-to-text initialized');
+      // this will initialise before Frame is connected, so proceed to disconnected state
+      currentState = ApplicationState.disconnected;
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  /// Manually stop the active speech recognition session, but timeouts will also stop the listening
+  Future<void> _stopListening() async {
+    await _speechToText.stop();
+  }
+
+  /// Timeouts invoke this function, but also other permanent errors
+  void _onSpeechError(SpeechRecognitionError error) {
+    if (error.errorMsg != 'error_speech_timeout') {
+      _log.severe(error.errorMsg);
+      currentState = ApplicationState.ready;
+    }
+    else {
+      currentState = ApplicationState.running;
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadApiKey() async {
@@ -69,17 +122,17 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
   }
 
-  Future<void> _handleSendPressed(types.PartialText message) async {
+  Future<void> _handleTextQuery(String request) async {
     final textMessage = types.TextMessage(
       author: _user,
       createdAt: DateTime.now().millisecondsSinceEpoch,
       id: const Uuid().v4(),
-      text: message.text,
+      text: request,
     );
 
     _addMessage(textMessage);
 
-    final response = await _chat!.sendMessage(Content.text(message.text));
+    final response = await _chat!.sendMessage(Content.text(request));
 
     _log.info('Gemini response: ${response.text}');
 
@@ -100,10 +153,52 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (mounted) setState(() {});
 
     try {
-      // TODO do the thing
+      // listen for STT
+      await _speechToText.listen(
+        listenOptions: SpeechListenOptions(
+          cancelOnError: true, onDevice: false, listenMode: ListenMode.dictation
+        ),
+        onResult: (SpeechRecognitionResult result) async {
+          if (currentState == ApplicationState.ready) {
+            // user has cancelled already, don't process result
+            // FIXME reinstate
+            //return;
+          }
 
-      currentState = ApplicationState.ready;
-      if (mounted) setState(() {});
+          if (result.finalResult) {
+            // on a final result we fetch the wiki content
+            _finalResult = result.recognizedWords;
+            _partialResult = '';
+            _log.fine('Final result: $_finalResult');
+            _stopListening();
+
+            // add final result to chat stream
+            _handleTextQuery(_finalResult);
+
+            // send final query text to Frame line 1 (before we confirm the title)
+            if (_finalResult != _prevText) {
+              //await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: _finalResult));
+              // TODO for now, just log result, can send a TextSpriteBlock in future
+              _prevText = _finalResult;
+            }
+
+            currentState = ApplicationState.ready;
+            if (mounted) setState(() {});
+          }
+          else {
+            // partial result - just display in-progress text
+            _partialResult = result.recognizedWords;
+            if (mounted) setState((){});
+
+            _log.fine('Partial result: $_partialResult, ${result.alternates}');
+            if (_partialResult != _prevText) {
+              // TODO for now, just log result, can send a TextSpriteBlock in future
+              //await frame!.sendMessage(TxPlainText(msgCode: 0x0a, text: _partialResult));
+              _prevText = _partialResult;
+            }
+          }
+        }
+      );
 
     } catch (e) {
       _log.fine('Error executing application logic: $e');
@@ -154,18 +249,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 Expanded(
                   child: Chat(
                     messages: _messages,
-                    onSendPressed: _handleSendPressed,
+                    onSendPressed: (p0) {},
                     showUserAvatars: true,
                     showUserNames: true,
                     user: _user,
                     theme: const DarkChatTheme(),
+                    customBottomWidget: Row(
+                      children: [
+                        const Spacer(),
+                        getFloatingActionButtonWidget(const Icon(Icons.mic), const Icon(Icons.cancel)) ?? const Spacer(),
+                      ]
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          floatingActionButton: getFloatingActionButtonWidget(
-              const Icon(Icons.file_open), const Icon(Icons.close)),
           persistentFooterButtons: getFooterButtonsWidget(),
         ));
   }
