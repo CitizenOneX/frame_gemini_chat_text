@@ -217,7 +217,7 @@ packages:
     source: hosted
     version: "4.0.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: "2237616a36c0d69aef7549ab439b833fb7f9fb9fc861af2cc9ac3eedddd69ca8"
@@ -451,10 +451,9 @@ packages:
   simple_frame_app:
     dependency: "direct main"
     description:
-      name: simple_frame_app
-      sha256: fbeb8a1e1ab2fcbed0b676f32fcd11f1c6364d502e417f3dbe7ae68fddb40b72
-      url: "https://pub.dev"
-    source: hosted
+      path: "../simple_frame_app"
+      relative: true
+    source: path
     version: "0.0.5"
   sky_engine:
     dependency: transitive

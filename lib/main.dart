@@ -4,8 +4,10 @@ import 'package:logging/logging.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:simple_frame_app/tx/text_sprite.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -47,6 +49,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   String _finalResult = "N/A";
   String? _prevText;
 
+  // Display image
+  // FIXME for debug of TxTextSpriteBlock only
+  final List<Image> _images = [];
 
   MainAppState() {
     Logger.root.level = Level.FINE;
@@ -198,6 +203,21 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
         if (response.text != null)  _updateLatestMessage(response.text!, concat: true);
       }
+
+      // TODO since we're all done, make the TxTextSpriteBlock
+      AssetBundle bundle = DefaultAssetBundle.of(context);
+      final font = img.BitmapFont.fromZip((await bundle.load('assets/spritefonts/unifont.zip')).buffer.asInt8List());
+      TxTextSpriteBlock tsb = TxTextSpriteBlock(
+        msgCode: 0x10,
+        width: 640,
+        lineHeight: 16,
+        displayRows: 3,
+        font: font,
+        text: (_messages[0] as types.TextMessage).text,
+      );
+      _images.clear();
+      _images.add(Image.memory(img.encodePng(tsb.toImage())));
+      if (mounted) setState(() {});
 
     } catch (e) {
 
@@ -356,6 +376,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     ),
                   ),
                 ),
+                // TODO remove once TxTextSpriteBlock is all OK
+                ..._images,
               ],
             ),
           ),
