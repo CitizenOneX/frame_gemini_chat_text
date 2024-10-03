@@ -4,10 +4,9 @@ import 'package:logging/logging.dart';
 import 'package:flutter_chat_types/flutter_chat_types.dart' as types;
 import 'package:flutter_chat_ui/flutter_chat_ui.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
-import 'package:simple_frame_app/tx/text_sprite.dart';
+import 'package:simple_frame_app/tx/text_sprite_block.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -50,11 +49,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   String? _prevText;
 
   // Display image
-  // FIXME for debug of TxTextSpriteBlock only
+  // (for debug of TxTextSpriteBlock only)
   final List<Image> _images = [];
 
   MainAppState() {
-    Logger.root.level = Level.FINE;
+    Logger.root.level = Level.INFO;
     Logger.root.onRecord.listen((record) {
       debugPrint(
           '${record.level.name}: [${record.loggerName}] ${record.time}: ${record.message}');
@@ -204,19 +203,31 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         if (response.text != null)  _updateLatestMessage(response.text!, concat: true);
       }
 
-      // TODO since we're all done, make the TxTextSpriteBlock
-      AssetBundle bundle = DefaultAssetBundle.of(context);
-      final font = img.BitmapFont.fromZip((await bundle.load('assets/spritefonts/unifont.zip')).buffer.asInt8List());
+      // trim any trailing newline/whitespace which usually seems to be at the end of the
+      // response. The zero-width resulting TxSprite can also muck up draw calls
+      _updateLatestMessage((_messages[0] as types.TextMessage).text.trim(), concat: false);
+
+      // since we're all done, make the TxTextSpriteBlock
       TxTextSpriteBlock tsb = TxTextSpriteBlock(
-        msgCode: 0x10,
+        msgCode: 0x20,
         width: 640,
-        lineHeight: 16,
+        fontSize: 48,
         displayRows: 3,
-        font: font,
         text: (_messages[0] as types.TextMessage).text,
       );
-      _images.clear();
-      _images.add(Image.memory(img.encodePng(tsb.toImage())));
+
+      await tsb.rasterize();
+
+      // send the header and the lines over to Frame for display
+      await frame!.sendMessage(tsb);
+
+      for (var line in tsb.lines) {
+        await frame!.sendMessage(line);
+      }
+
+      // (only use this to test if TxTextSpriteBlock is generating sprites correctly)
+      //_images.clear();
+      //_images.add(Image.memory(await tsb.toPngBytes()));
       if (mounted) setState(() {});
 
     } catch (e) {
@@ -266,8 +277,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         onResult: (SpeechRecognitionResult result) async {
           if (currentState == ApplicationState.ready) {
             // user has cancelled already, don't process result
-            // FIXME reinstate
-            //return;
+            // (need to comment this out if testing while Frame is unavailable)
+            return;
           }
 
           if (result.finalResult) {
@@ -359,7 +370,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     );
                   }).toList(),
                 ),
-                ElevatedButton(onPressed: run, child: const Text('Run')),
+                // used only for developing when Frame is unavailable
+                //ElevatedButton(onPressed: run, child: const Text('Run')),
                 Expanded(
                   child: Chat(
                     messages: _messages,
@@ -376,7 +388,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     ),
                   ),
                 ),
-                // TODO remove once TxTextSpriteBlock is all OK
+                // used only for debugging TxTextSpriteBlock
                 ..._images,
               ],
             ),
