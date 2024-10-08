@@ -16,8 +16,7 @@ dependencies:
   image: ^4.2.0
   logging: ^1.2.0
   shared_preferences: ^2.3.2
-  simple_frame_app:
-    path: ../simple_frame_app
+  simple_frame_app: ^0.0.7
   speech_to_text: ^7.0.0
   uuid: ^4.5.0
 
