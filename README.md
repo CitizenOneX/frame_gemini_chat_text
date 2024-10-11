@@ -20,3 +20,6 @@ Please note, API queries using free keys can be used for training Google's model
 ## Screenshots
 
 ![Screenshot1](docs/screenshot1.png)
+
+### Architecture
+![Architecture](docs/Frame%20App%20Architecture%20-%20Gemini%20Chat%20Universal.svg)
