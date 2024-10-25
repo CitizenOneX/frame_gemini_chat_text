@@ -211,23 +211,27 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       TxTextSpriteBlock tsb = TxTextSpriteBlock(
         msgCode: 0x20,
         width: 640,
-        fontSize: 48,
-        displayRows: 3,
+        fontSize: 24,
+        maxDisplayRows: 10,
         text: (_messages[0] as types.TextMessage).text,
       );
 
-      await tsb.rasterize();
+      if (tsb.isNotEmpty) {
+        // TODO here we rasterize all of them and send them all to make it scroll right away,
+        // but we could rasterize and send each one individually with a small delay too
+        await tsb.rasterize(startLine: 0, endLine: tsb.numLines - 1);
 
-      // send the header and the lines over to Frame for display
-      await frame!.sendMessage(tsb);
+        // send the header and the lines over to Frame for display
+        await frame!.sendMessage(tsb);
 
-      for (var line in tsb.lines) {
-        await frame!.sendMessage(line);
+        for (var sprite in tsb.rasterizedSprites) {
+          await frame!.sendMessage(sprite);
+        }
       }
 
       // (only use this to test if TxTextSpriteBlock is generating sprites correctly)
       //_images.clear();
-      //_images.add(Image.memory(await tsb.toPngBytes()));
+      //_images.add(Image.memory(await tsb.toPngBytes(startLine: 0, endLine: tsb.numLines - 1)));
       if (mounted) setState(() {});
 
     } catch (e) {

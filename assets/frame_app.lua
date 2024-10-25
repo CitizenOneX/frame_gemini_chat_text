@@ -30,11 +30,21 @@ function app_loop()
 			if (data.app_data[TEXT_SPRITE_BLOCK] ~= nil) then
 				-- show the text sprite block
 				local tsb = data.app_data[TEXT_SPRITE_BLOCK]
-				for index, spr in ipairs(tsb.sprites) do
-					frame.display.bitmap(1, tsb.offsets[index].y + 1, spr.width, 2^spr.bpp, 0, spr.pixel_data)
+
+				-- it can be that we haven't got any sprites yet
+				local shift_y = 0
+				if tsb.first_sprite_index > 0 then
+					shift_y = tsb.offsets[tsb.first_sprite_index].y
+
+					for index = tsb.first_sprite_index, tsb.last_sprite_index do
+						local spr = tsb.sprites[index]
+						frame.display.bitmap(1, tsb.offsets[index].y + 1 - shift_y, spr.width, 2^spr.bpp, 0, spr.pixel_data)
+					end
+
+					frame.display.show()
+					last_text_show = frame.time.utc()
 				end
-				frame.display.show()
-				last_text_show = frame.time.utc()
+
 			end
 
 			if (data.app_data[CLEAR_MSG] ~= nil) then
@@ -51,9 +61,10 @@ function app_loop()
 		frame.sleep(0.1)
 
 		-- clear the display after showing text for 10 seconds
-		if (data.app_data[TEXT_SPRITE_BLOCK] ~= nil and frame.time.utc() - last_text_show > 10) then
+		if (data.app_data[TEXT_SPRITE_BLOCK] ~= nil and last_text_show ~= 0 and frame.time.utc() - last_text_show > 10) then
 			frame.display.text(" ", 1, 1)
 			frame.display.show()
+			last_text_show = 0
 			data.app_data[TEXT_SPRITE_BLOCK] = nil
 		end
 	end
